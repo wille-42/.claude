@@ -1,0 +1,404 @@
+diff --git a/.claude/skills/base-author/SKILL.md b/.claude/skills/base-author/SKILL.md
+index e8a0cbb..8f3d0c6 100644
+--- a/.claude/skills/base-author/SKILL.md
++++ b/.claude/skills/base-author/SKILL.md
+@@ -1,7 +1,7 @@
+ ---
+ name: base-author
+-description: 写 / 改 Obsidian Base（`.base`）的规程，是 `dp-base` subagent 开机预载的内部操作手册，不在主对话直接触发。一切 `.base` 工作（含建持久 base、数据表，调过滤器 / 公式 / 列 / 分组 / 排序）由主 LLM spawn `dp-base` subagent 承接，subagent 在自己隔离的 context 里按本手册办。手册覆盖 4 轴设计框架、命名、Step 1-4 骨架；filters / formulas / view 的合法语法见 references。
+-version: 2.5.0
++description: 编写和修改 Obsidian Base 文件（`.base`）的操作手册。创建 base、调整过滤器和公式、修改列与分组排序，这些工作都由 `dp-base` subagent 承接，主对话不直接触发。subagent 启动时预载本手册，按四轴设计框架与 Step 1-4 骨架执行。filter、formula、view 的语法参考见 `references/`。
++version: 2.5.3
+ ---
+ **重点是依据目标和需求设计 base**：目标想清楚了，YAML 只是把它翻译出来；目标没想清楚就动手，最容易得到「能跑但没用」的视图。
+ 
+@@ -9,39 +9,51 @@ version: 2.5.0
+ 
+ ## 设计框架
+ 
+-写 base 前先走一遍下述判断。这是内部思考，不必逐项问。每条只问问题，**不预设答案菜单**，具体语法 / 形态选项见 `references/`。
++写 base 前先在内部走一遍下面四个轴的判断，不必逐项向用户确认。每个轴只列出需要回答的问题，不预设选项。语法与形态的具体选项见 `references/`。
+ 
+ ### 轴 1：目标
+ 
+-- **值得建吗 / 值得留吗**：一句话说出 base 要回答什么 / 支撑什么动作，说不出就别建，回 `grep` / `obsidian search` / `dp-search`。所有 base 都是持久件，一次性的问题不要为它铸一个永久 base，只有需要反复看 / 复用的视角才值得建。
+-- 同时想清楚**空集语义（empty-set semantics）**：目标是「找出 X」（巡检 / 待办型，空集 = 干净）还是「展示 Y」（浏览 / 仪表盘型，空集 = 异常）？这一判断决定 Step 4 报告里 0 条算成功还是 flag。
++**值不值得建？** 用一句话说清这个 base 要回答什么问题、支撑什么动作。如果说不出，就不要建，用 `grep`、`obsidian search` 或 `dp-search` 代替。`.base` 文件一旦建立就长期存在于 `bases/` 目录，一次性问题不值得专门建一个 base，只有需要反复查看和复用的视角才值得建。
++
++**查询结果为空时意味着什么？** 这个判断称为空集语义（empty-set semantics），分两类。一类是「找出 X」型，比如巡检和待办，空集意味着干净，没有需要处理的条目。另一类是「展示 Y」型，比如浏览页和仪表盘，空集意味着异常，说明过滤条件可能有误或数据确实为空。这个判断决定 Step 4 中 0 条命中算成功还是需要标记。
+ 
+ ### 轴 2：数据域
+ 
+-- 目标关心 vault 的哪部分？这一层落到全局 `filters:`。
+-- 必删项（assets / trash / .obsidian / .claude / bases 自身）按数据域取需要的几条，模板见 `references/filter-syntax.md`。
++**目标关心 vault 的哪一部分？** 把这个范围写进全局 `filters:` 字段。
++
++必须排除的目录有 `assets`、`trash`、`.obsidian`、`.claude` 和 `bases/` 自身。根据实际数据域选择需要的排除条件即可。排除过滤器的模板见 `references/filter-syntax.md`。
+ 
+ ### 轴 3：形态
+ 
+-- **一 `.base` 一 view**，所以这里定的是「那一个 view」的形态，不是 view 数量。要呈现两个不同视角就建两个 base。
+-- **单笔记平铺 vs 分组聚合（per-note vs grouped aggregation）**：目标是看「每一笔」还是「按某维度分组的特征」？前者 sort + 列；后者 `groupBy` + `summaries`。
+-- **YAML 分层**：因只有一个 view，视角过滤直接进全局 `filters:`（view 级 `filters:` 罕用，仅在需要叠加临时子集时），派生字段进 `formulas:`。
+-- type / 列 / 排序 / 分组 / 汇总 / 限行的具体选项见 `references/view-types-and-fields.md`。
++一个 `.base` 文件只配一个 view，所以这里定的是这唯一 view 的形态，不是 view 的数量。如果要呈现两个不同视角，就建两个 base。
++
++**单笔记平铺还是分组聚合？** 如果需要逐条查看每一笔笔记，用 sort 加列来平铺展示。如果需要按某个维度分组后查看聚合特征，用 `groupBy` 加 `summaries`。
++
++**YAML 分层放在哪里？** 因为只有一个 view，视角过滤直接写进全局 `filters:` 字段。view 级的 `filters:` 很少用到，只在需要叠加临时子集时才写。派生字段写进 `formulas:`。
++
++type、列、排序、分组、汇总、限行的具体选项见 `references/view-types-and-fields.md`。
+ 
+ ### 轴 4：复用 vs 新建
+ 
+-- **先跑 `obsidian bases` 列清单**，对照既存 base 的职责。因一 base 一 view，加视角 = 建新 base，不能往既存里塞 view；复用的闸门降为**别建与既存等价的单-view base**。数据域 + 视角维度与某既存 base 重合时，直接用它，不另起一个。
+-- 所有 base 都是永久件，没有临时层兜底，新建一个就长期占着 `bases/`。
+-- 既存 base 已写过的 formula 优先复用而非重复造轮；常用片段（图标 / 时间 / 计数 / 外链）见 `references/formula-syntax.md`。
++第一动作是跑 `obsidian bases` 列出所有已有的 base，对照它们的职责。因为一个 base 只能装一个 view，想加一个新视角就要建新 base，不能往已有的 base 里追加 view。因此复用的判断标准只有一条：如果某个已有 base 的数据域和视角维度与你想建的完全重合，直接用它，不要另建。
++
++`.base` 文件是长期存在的，没有临时文件的概念。每新建一个就会长期留在 `bases/` 目录里。
++
++已有 base 中写过的 formula 优先复用，不要重复编写。图标、时间、计数、外链等常用片段的模板见 `references/formula-syntax.md`。
+ 
+ ## 核心约束
+ 
+-- **一 `.base` 一 view，view `name` == 文件名（去 `.base`）**：`views:` 段只允许一个条目，其 `name` 与文件名去掉 `.base` 后的部分逐字相同（如文件 `recent-new.list.base` 的 view `name: recent-new.list`）。这是查询永远不需要 view 名的前提，下游 `base:query` 因此省略 `view=`。
+-- **落点 `bases/`**：文件名按 [[#命名]] 选，结构信息写进名里。
+-- **禁用 `obsidian base:views`**：它依赖活动 base、会切 tab；本手册的不变式（见上一条）也已让 view 名不必查。
+-- **重命名 / 移动 / 删除** `.base` 用 `obsidian rename` / `obsidian move` / `obsidian delete`，CLI 自动更新引用（CLAUDE.md `## Obsidian CLI`）。注意 `.base` 名含点（`x.list.base`），`rename` 的 `name=` 必须带上 `.base` 全名（`name="x.list.base"`），否则 CLI 把末段当扩展名、丢掉 `.base`。改名后同步内部 view `name`。
+-- **编辑既存 base 不覆盖 GUI 手调字段**：`order` 顺序、`cardSize` / `imageAspectRatio`、`groupBy` 选择。改既存先 Read 全文，用 Edit 局部替换，**不用 Write 全量覆盖**。新建文件无人手调，无此顾虑。
+-- **完整 YAML 语法 / 片段 / 函数 / view 字段 / 陷阱反查**见 `references/`。
++**一个 `.base` 只配一个 view，view 的 `name` 字段等于文件名去掉 `.base` 后缀。** `views:` 段只允许一个条目，它的 `name` 必须与文件名去掉 `.base` 后缀的部分逐字相同。例如文件 `recent-new.list.base` 对应的 view `name` 是 `recent-new.list`。这条规则保证了查询时不必传 view 名，`base:query` 可以省略 `view=` 参数。
++
++**文件写入 `bases/` 目录。** 文件名按下面[[#命名]]节的规则确定，把结构信息全部编进名字里。
++
++**禁用 `obsidian base:views` 命令。** 这个命令依赖当前活动的 base，调用时会切换 tab，打断用户操作。上面的规则已经保证了 view 名不必查。
++
++**重命名、移动、删除 `.base` 必须走 CLI。** 分别用 `obsidian rename`、`obsidian move`、`obsidian delete`，CLI 会自动更新全 vault 的引用（详见 CLAUDE.md `## Obsidian CLI`）。注意：`.base` 文件名里含多个点，例如 `x.list.base`，`rename` 的 `name=` 参数必须传完整文件名如 `name="x.list.base"`，否则 CLI 会把最后一段当作扩展名而丢掉 `.base`。改名后还要同步修改 YAML 里的 view `name`。
++
++**编辑已有 base 时不要覆盖用户在 GUI 里手动调整过的字段。** 这些字段包括 `order`、`cardSize`、`imageAspectRatio`、`groupBy` 等。编辑已有 base 时先 Read 全文，再用 Edit 做局部替换，不要用 Write 全量覆盖。新建文件不存在手动调整过的字段，没有这个顾虑。
++
++YAML 语法、片段、函数、view 字段与常见陷阱的完整参考都在 `references/` 目录下。
+ 
+ ## 命名
+ 
+@@ -51,31 +63,36 @@ version: 2.5.0
+ - **type**：view 类型，`table` / `list` / `cards` / `map` 之一。
+ - **-by-<分组维度>**：仅当 view 用了 `groupBy` 时追加，写分组的维度，如按 kind 分组写 `-by-kind`、按 area 分组写 `-by-area`；无分组则整段省略。
+ 
+-例：`mapping-overview.table-by-kind.base`（按 kind 分组的表）、`recent-new.list.base`（无分组的列表）。内部 view `name` 取值规则见 [[#核心约束]] 首条。
++例：`mapping-overview.table-by-kind.base`（按 kind 分组的表）、`recent-new.list.base`（无分组的列表）。内部 view `name` 取值规则见[[#核心约束]]首条。
+ 
+ ## 骨架
+ 
+ ### Step 1：设计（不动文件）
+ 
+-第一动作先跑 `obsidian bases` 列既有 base，作为复用判断的事实底座（轴 4），不凭记忆。再走一遍 4 轴，落成一段设计纪要：
++第一动作是跑 `obsidian bases` 列出所有已有的 base，为轴 4 的复用判断提供事实依据，不凭记忆。然后走一遍四个轴，整理出设计纪要：
+ 
+-- 一句话目标 + 空集语义；
+-- 复用决定：直接用某既存 base 或新建；
+-- 这一个 view 的 type + 分组维度 + 关键 filter；
+-- 新建时的文件名，命名见 [[#命名]]，该文件名去 `.base` 即 view name。
++- 一句话目标，以及空集语义的类型
++- 复用决定：直接用某个已有 base，还是新建
++- view 的 type、分组维度、关键 filter
++- 新建时的文件名（命名规则见[[#命名]]，文件名去掉 `.base` 即 view name）
+ 
+ ### Step 2：写 / 改 YAML
+ 
+-- **新建**：按设计写 YAML，落点 `bases/`，用 Write，文件名 `<用途 slug>.<type>[-by-<分组维度>].base`（命名见 [[#命名]]），`views:` 段只放一个 view，其 `name` == 文件名去 `.base`。
+-- **改既存**：Read 后 Edit 局部替换那唯一 view。要加一个新视角不是加 view，是建一个新 base。
+-- 语法要点（YAML 引号、`note.` vs `file.`、迭代变量 `value`）见 `references/base-yaml-schema.md` 与 `references/troubleshooting.md`。
++- **新建**：按设计写 YAML，用 Write 写入 `bases/` 目录。文件名格式为 `<用途 slug>.<type>[-by-<分组维度>].base`（见[[#命名]]）。`views:` 段只放一个 view，其 `name` 等于文件名去掉 `.base`。
++- **修改已有**：先 Read 全文，再用 Edit 局部替换。如果要加一个新视角，不是在已有 base 里加 view，而是建一个新 base。
++- 语法要点（YAML 引号、`note.` 与 `file.` 的区别、迭代变量 `value`）见 `references/base-yaml-schema.md` 和 `references/troubleshooting.md`。
+ 
+ ### Step 3：验证
+ 
+-- **Read 自验**：缩进、引号闭合、`note.` vs `file.` 没混用、`views:` 只含一个 view 且其 `name` == 文件名去 `.base`、文件名的 `type` / 分组段与 view 实际的 `type` / `groupBy` 一致。
+-- **端到端验**：跑 `obsidian base:query path="bases/<file>.base" format=paths`（省略 `view=`，命中唯一 view），比对返回条数与预期（含空集预期，见轴 1）。
+-- 返回与预期不符就回到设计：是 filter 写错（语法）还是 scope 想错（设计）？
++- **Read 自查**：检查缩进、引号闭合、`note.` 和 `file.` 没有混用、`views:` 只含一个 view 且其 `name` 等于文件名去掉 `.base`、文件名中的 type 和分组段与 view 实际的 `type` / `groupBy` 一致。
++- **端到端验证**：跑 `obsidian base:query path="bases/<file>.base" format=paths`（省略 `view=`，自动命中唯一 view），比对返回条数与预期。预期包括空集情况，参照轴 1 的空集语义判断。
++- 如果返回与预期不符，回到设计阶段排查：是 filter 语法写错了，还是数据范围本身想错了？
+ 
+ ### Step 4：报告
+ 
+-报告：created / updated 的 base slug 落点；每个 base 的 `base:query` 命中条数；命中是否符合空集预期（轴 1）；异常（YAML 报错、字段名疑似笔误、命中明显偏离预期）。
++回传报告，包含以下内容：
++
++- 创建或更新的 base 文件路径
++- 每个 base 的 `base:query` 命中条数
++- 命中结果是否符合空集语义的预期（参照轴 1）
++- 异常情况：YAML 报错、字段名疑似笔误、命中数明显偏离预期
+diff --git a/.claude/skills/base-query/SKILL.md b/.claude/skills/base-query/SKILL.md
+index d074d88..58ddabe 100644
+--- a/.claude/skills/base-query/SKILL.md
++++ b/.claude/skills/base-query/SKILL.md
+@@ -1,32 +1,34 @@
+ ---
+ name: base-query
+-description: 通过 Obsidian CLI 只读地枚举满足 .base 过滤条件的笔记，是 `dp-base` subagent 开机预载的内部操作手册，不在主对话直接触发。一切查 base 的需求由主 LLM spawn `dp-base` subagent 承接，subagent 按本手册跑 `obsidian base:query`，回传 note 路径清单。
+-version: 2.3.0
++description: 通过 Obsidian CLI 只读查询笔记的操作手册：给定一个 `.base` 文件，返回满足其过滤条件的笔记路径清单。所有查询 base 的需求都由 `dp-base` subagent 承接，主对话不直接触发。subagent 启动时预载本手册，按手册执行 `obsidian base:query` 并把路径清单回传上游。
++version: 2.3.2
+ ---
+-通过 `obsidian base:query` **只读地**枚举满足 `.base` 过滤条件的笔记，得到回传上游所需的命中清单。**前提**：Obsidian 桌面端运行中。
+-
+-> 本规程只**读**。写 / 改 / 删 `.base` 本体走 base-author；建好后本规程照 Step 1-4 跑，无须特殊衔接。
++通过 `obsidian base:query` **只读地**枚举满足 `.base` 过滤条件的笔记，得到回传上游所需的命中清单。
+ 
+ ## 核心约束
+ 
+-- **寻址用 `path=`，省略 `view=`**：`path="bases/<slug>.base"`，与 base-author 同口径，避免 basename 撞名。一 `.base` 一 view（base-author 不变式），省略 `view=` 即命中那唯一 view，**永不需要取 view 名，也就永不需要为取 view 名而 Read `.base`**。
+-- **禁用 `obsidian base:views`**：CLAUDE.md 已列入禁用清单；省略 `view=` 即命中唯一 view，本就用不到它。
+-- **format 默认 `paths`**——最轻、最适合下游 Read / Edit 接管。
+-  - 需要属性值做判断 / 统计 → `json`。
+-  - delegation 明确要渲染整齐的表 → `md`。
+-  - 导出外部表格 → `csv` / `tsv`。
+-  默认走 paths，避免大 JSON / md 表塞爆上下文。
++- **寻址用 `path=`，省略 `view=`**：路径格式为 `path="bases/<slug>.base"`，与 base-author 保持一致，避免 basename 撞名。每个 `.base` 只有一个 view（base-author 的核心规则），省略 `view=` 即命中那唯一的 view。因此永远不需要查 view 名，也不需要为了取 view 名而 Read `.base` 文件。
++- **禁用 `obsidian base:views`**：CLAUDE.md 已将其列入禁用清单。省略 `view=` 即命中唯一 view，本来就用不到这个命令。
++- **format 默认 `paths`**，这是最轻量的格式，最适合下游用 Read / Edit 处理。其他格式按需选择：
++  - 需要属性值做判断或统计时，用 `json`
++  - 上游明确要求渲染整齐的表格时，用 `md`
++  - 需要导出为外部表格时，用 `csv` / `tsv`
++
++  默认用 paths，避免大段 JSON 或 md 表格占满上下文窗口。
+ 
+ ## 工作流
+ 
+ ### Step 1：定位 .base
+-delegation message 是目标的唯一来源，你看不到当前笔记，也问不了人。
+-- 报了 path / slug → 直接 `path="bases/<file>.base"`，跳过列举。
+-- 只给了 basename 或描述 → `obsidian bases` 列全部，匹配到目标。
+-- 既没报也无可匹配的描述 → 不反问：`obsidian bases` 列全部，有明显贴合 delegation 意图的就选它并在回传标注；实在无一贴合，回传「未能定位目标 base，现有清单为……」交给 orchestrator。
++
++上游传来的委托消息是目标的唯一来源，你看不到当前笔记，也无法向用户提问。
++
++- 如果委托消息里给出了 path 或 slug，直接用 `path="bases/<file>.base"` 寻址，跳过列举。
++- 如果只给了 basename 或描述，跑 `obsidian bases` 列出全部 base，从中匹配目标。
++- 如果既没给路径也没有可匹配的描述，不要反问。跑 `obsidian bases` 列出全部 base，如果有明显符合委托意图的就选它并在回传中标注。如果确实没有符合的，回传「未能定位目标 base，现有清单为……」交给 orchestrator 处理。
+ 
+ ### Step 2：判断空集语义
+-slug 已按 base-author 命名约定描述了这个 base 找什么。结合 slug 与 delegation 意图定空集语义：「找出 X」（巡检 / 待办 / 异常型，空集 = 干净）还是「展示 Y」（仪表盘 / 浏览型，空集 = 异常）。仅当 slug + delegation 判不准时，才 Read `.base` 的 `filters:` 看意图。
++
++base 的文件名（slug）已经按照 base-author 的命名约定描述了这个 base 要找什么。结合 slug 和委托意图来判断空集语义：是「找出 X」型（巡检、待办、异常清单，空集意味着干净），还是「展示 Y」型（仪表盘、浏览页，空集意味着异常）。只有当 slug 和委托意图都无法判断时，才 Read `.base` 文件的 `filters:` 部分来确认意图。
+ 
+ ### Step 3：跑查询
+ 
+@@ -34,13 +36,14 @@ slug 已按 base-author 命名约定描述了这个 base 找什么。结合 slug
+ obsidian base:query path="bases/<slug>.base" format=paths
+ ```
+ 
+-format 按 [核心约束](#核心约束) 选。
++format 按[[#核心约束]]选。
+ 
+ ### Step 4：判断 + 回报
+-- **命中 N 条**：报数 + 前若干 wikilink（量大标「共 N 条，需要全清单再要」）。被其他 skill 调用时，直接把 paths 喂给上游，不渲染。
+-- **0 条**：回看 Step 2 定的空集语义——
+-  - 「找出 X」型（巡检 / 待办 / 异常清单）：空集 = 干净，正常报告即可。
+-  - 「展示 Y」型（仪表盘 / 浏览）：空集可能是 filter 太严或数据真空，在回传里 flag 给 orchestrator 判断。
++
++- **命中 N 条**：报告命中数量和前若干条的 wikilink。如果数量较大，标注「共 N 条，需要全清单请再要」。如果是被其他 skill 调用，直接把 paths 传给上游，不做渲染。
++- **0 条**：回看 Step 2 判断的空集语义。
++  - 「找出 X」型（巡检、待办、异常清单）：空集表示干净，正常报告即可。
++  - 「展示 Y」型（仪表盘、浏览页）：空集可能是 filter 过严或数据确实为空，在回传中标记交给 orchestrator 判断。
+ - **报错**：
+-  - `Obsidian is not running` → 回传「Obsidian 未运行」交给 orchestrator（它能让用户启动）。
+-  - `base file not found` → `obsidian bases` 复核 path。
++  - `Obsidian is not running`：回传「Obsidian 未运行」交给 orchestrator 处理，它可以提示用户启动。
++  - `base file not found`：跑 `obsidian bases` 复核路径。
+diff --git a/CLAUDE.md b/CLAUDE.md
+index f83850c..1009b9b 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -1,12 +1,12 @@
+ 本文件 [[CLAUDE.md]] 是 [[digital-playground|Digital Playground]] 的场地说明。
+ 
+-[[digital-playground|Digital Playground]] 是一个人类与 LLM Agents 共享的玩耍、学习和创造的场所，以 Obsidian vault 为载体，把分散的源料持续测绘成认知地图。人类策展源料、提问、指方向；LLM 在两种模式间切换：[[#mapping/|mapping]] 维护这张图，[[#Orienting Oneself 自我定向|orienting]] 在图上定向、走邻里、找路径，搜集信息，解决问题。
++[[digital-playground|Digital Playground]] 是一个人类与 LLM Agents 共享的玩耍、学习和创造的场所，以 Obsidian vault 为载体，把分散的源料持续测绘成认知地图。人类策展源料、提问、指方向；LLM 在两种模式间切换：[[#mapping/|mapping]] 维护这张图，[[#Orienting Oneself 自我定向|orienting]] 在图上定向、遍历邻居、寻找路径，搜集信息，解决问题。
+ 
+ ## Design Principles 设计原则
+ 
+ - 扁平网络：认知地图保持扁平，避免层级。页面之间靠链接表达关系，不靠嵌套目录或元数据分类。不用摘要充当上级节点来聚合下级页面。每个概念平等存在于图中，不由树状位置判定重要性。
+-- 源料与派生分离：人类原创内容属于源料，LLM 只读不改。LLM 产出落于独立的派生空间。
+-- 地图不是疆域：派生知识是指向源料的路标，不是源料本身的替代品。应从派生页顺链接回到源料，在原始上下文中理解，不直接据派生页作答。
++- 源料与派生分离：人类原创内容属于源料，LLM 只读不改。LLM 产出落在独立的派生空间。
++- 地图不是疆域：派生知识是指向源料的路标，不是源料本身的替代品。应从派生页顺链接回到源料，在原始上下文中理解，不直接根据派生页作答。
+ - 创作归人类：LLM 测绘源料、维护地图、辅助定向，放大人类的创作力，不生成内容顶替人类的原创。派生页可以提炼、连接、拼出新结论，但它们是指向源料的地图，不是冒充原创、可脱离源料独立流通的成品。
+ - 持续生长：mapping 不是一次建成的档案，而是随源料汇入持续重测、扩张、修正的地图；playground 也不追求完工，价值在玩耍、学习、创造的不断进行，建与用相互滋养，永不收工。
+ 
+@@ -20,25 +20,25 @@
+ 2. 同一轮已定向过，本轮是延续追问
+ 3. 输入触发的是操作类 skill 而非问答
+ 
+-**贯穿全程的硬约束**：两个 subagent 只回传**路径加一句理由**，绝不回传任何源料或派生页的正文。源料的整页阅读与理解只发生在你这层主 context。这是守住「在原始上下文中理解、不据派生摘要作答」的唯一闸门。
++**贯穿全程的硬约束**：两个 subagent 只回传**路径加一句理由**，绝不回传任何源料或派生页的正文。源料的整页阅读与理解只发生在你这层主 context。这是确保「在原始上下文中理解、不根据派生摘要作答」的唯一约束。
+ 
+-**落位（situating）**：spawn `dp-situating` subagent，把人类输入交给它，拿回排序的落点清单。`dp-situating` 只返回 `mapping/` 下的 POI 路径。人类在输入中直接指名的源料路径由你识别，不经 `dp-situating`，直接纳入 sources 并 Read。`dp-situating` 的检索手段（L1 文件名 / L2 单文件内容）的细节在其定义里，你不必复述，只接收落点清单。
++**落位（situating）**：spawn `dp-situating` subagent，把人类输入交给它，拿回排序的落点清单。`dp-situating` 只返回 `mapping/` 下的 POI 路径。人类在输入中直接指名的源料路径由你识别，不经 `dp-situating`，直接纳入 sources 并 Read。`dp-situating` 的检索手段（L1 文件名 / L2 单文件内容）的细节在它的定义里，你不必复述，只接收落点清单。
+ 
+-**运动（moving）**：你持有 frontier 循环，subagent 只做单节点展开。状态由你维护：`visited` 集、`frontier` 队列、跳数预算（落点 depth 0，邻居 depth+1，depth 达到 5 的节点不再展开）。每个落点至少触达一份源料：若某落点展开后仍未 Read 到任何源料，继续沿顺路出链扩展，不得提前放弃。
++**运动（moving）**：你持有 frontier 循环，subagent 只做单节点展开。状态由你维护：`visited` 集、`frontier` 队列、跳数预算。跳数预算的规则是：落点 depth 为 0，邻居 depth 加 1，depth 达到 5 的节点不再展开。每个落点至少触达一份源料：若某落点展开后仍未 Read 到任何源料，继续沿顺路出链扩展，不得提前放弃。
+ 
+ 每轮：
+ 
+ 1. 把当前 `frontier` 的每个节点**并行** spawn 一个 `dp-moving`，拿回各自的双向邻居指针。
+ 2. 把所有回传里的**源料路径**攒进 sources，并**整页 Read 本轮新增的源料**。
+-3. 判停（见停止节）。未停则组装下一层 `frontier`：取各回传的 POI 邻居，顺路出链 POI 优先于逆路入链 POI，对 `visited` 与本层已收去重，剪掉语义预判无关者。
++3. 判断是否停止（见停止节）。如果没有停止，就组装下一层 `frontier`：取各回传的 POI 邻居，顺路出链 POI 优先于逆路入链 POI，对 `visited` 和本层已经收集到的去重，剪掉语义预判为无关的节点。
+ 
+-**停止（stopping）**：每轮 Read 完新增源料后判，满足任一即停：
++**停止（stopping）**：每轮 Read 完新增源料之后判断，满足任意一条就停止：
+ 
+ - 已读源料能直接回答输入。
+ - `frontier` 空。
+ - 已走满 5 跳仍未收敛，以当前已读源料做最优回答。
+ 
+-停后，据**你主 context 里整页读过的源料**作答，不据 subagent 的转述。
++停止之后，根据**你主 context 里整页读过的源料**作答，不根据 subagent 的转述。
+ 
+ ## Directories & Permissions 目录与权限
+ 
+@@ -56,7 +56,7 @@
+ | `.claude/`   | Claude Code 的 skills / commands / agents |     | LLM 可提议改动，需人类确认 |
+ | `CLAUDE.md`  | 本文件                                      |     | 与人类共同维护         |
+ 
+-附件落到所属笔记同级的 `assets/` 子目录。`mapping/` 是例外：所有派生媒体统一落 `mapping/assets/`。assets/` 权限跟随父级目录。`
++附件落到所属笔记同级的 `assets/` 子目录。`mapping/` 是例外：所有派生媒体统一落 `mapping/assets/`。`assets/` 目录的权限跟随父级目录。
+ 
+ ### notes/
+ 
+@@ -69,8 +69,8 @@
+ 人类与 LLM 共同维护的任务清单。
+ 
+ 1. 粒度灵活：一个文件可承载一个含多个 `- [ ]` 的项目，也可只承载一个独立 task。LLM 按规模判断：小任务并入相关项目文件，大任务连同子任务清单独立成文。
+-2. 格式：GFM 任务列表，`- [ ]` 未完成 / `- [x]` 已完成。无强制 frontmatter。文件名自由，自然语言。
+-- LLM 主动勾选：完成 task 描述的工作后，LLM 主动勾上对应 `- [x]`。无对应 task 的工作不必反向补 task 条目。
++2. 格式：GFM 任务列表，`- [ ]` 未完成 / `- [x]` 已完成。没有强制的 frontmatter。文件名自由取名，用自然语言。
++- LLM 主动勾选：完成 task 描述的工作后，LLM 主动勾上对应 `- [x]`。没有对应 task 的工作不必反向补 task 条目。
+ - 可 ingest 进 mapping：项目完成或阶段性结束时，若过程沉淀了可复用知识，比如「如何搭建 vault」，可 ingest 为 concept / synthesis。task 文件本身不动。
+ 
+ ### bases/
+@@ -79,13 +79,13 @@
+ 
+ - base 是浏览 / 汇总入口，不写源数据。
+ - **一切 `.base` 的读 / 写 / 查一律 spawn `dp-base` subagent**，把 YAML 语法细节与试错往返关在它隔离的 context 里，主 context 只接结果。`base-author` / `base-query` 降为 `dp-base` 开机预载的内部手册，主对话不直接调，更不许 Write / Edit 直接动 `.base`。
+-- base 优先识别：作答前先问「答案是不是已经躺在某个 base 里、或可由 base 直接导出」。问 ingest 状态、近期活动、分类清单、「某 base 里有什么」这类，命中即 spawn `dp-base` 查对应 base。此识别只管这类汇总 / 状态查询，不触及 orienting。
++- base 优先识别：作答前先问「答案是不是已经躺在某个 base 里、或可由 base 直接导出」。问 ingest 状态、近期活动、分类清单、「某 base 里有什么」这类，命中即 spawn `dp-base` 查对应 base。这种识别只管汇总和状态查询，不触及 orienting。
+ 
+ ### mapping/
+ 
+-[[digital-playground|Digital Playground]] 的认知地图层：LLM 从源料中提炼的全部派生知识落在此处。三个内容子目录按抽象程度递增排列：`entities/` 记录具体事物，`concepts/` 提炼可复用的思想原子，`syntheses/` 跨源拼接新结论。三类条目的每个文件即地图上的一个 POI：有名、可被 situating 选中、可被 moving 经过、可被反链指向。
++[[digital-playground|Digital Playground]] 的认知地图层：LLM 从源料中提炼的全部派生知识落在此处。三个内容子目录按抽象程度递增排列：`entities/` 记录具体事物，`concepts/` 提炼可复用的思想原子，`syntheses/` 跨源拼接新结论。三类条目的每个文件就是地图上的一个 POI：有名、可被 situating 选中、可被 moving 经过、可被反链指向。
+ 
+-`entities/`：人物、组织、产品、地点等可命名实体。文件名拉丁名实体用拼音或英文全名，小写，连字符分隔，例如 `alexander-karp.md`、`vannevar-bush.md`、`andrej-karpathy.md`、`palantir.md`、`arrl.md`，人物名不可考时退而用姓，比如 `karpathy.md`；中文专名实体无通用拉丁拼写、或中文更自然者直接用中文，例如 `华为.md`、`梁启超.md`，同 concepts 规则。
++`entities/`：人物、组织、产品、地点等可命名实体。文件名拉丁名实体用拼音或英文全名，小写，连字符分隔，例如 `alexander-karp.md`、`vannevar-bush.md`、`andrej-karpathy.md`、`palantir.md`、`arrl.md`，人物名不可考时改用姓，比如 `karpathy.md`；中文专名实体如果没有通用拉丁拼写、或中文更自然的，直接用中文，例如 `华为.md`、`梁启超.md`，同 concepts 规则。
+ 
+ `concepts/`：观念、技术、框架、主题，可被反复引用的「思想原子」。文件名中文专有概念直接用中文，例如 `科技共和国.md`、`创新荒漠.md`；通用技术术语用英文小写连字符，例如 `rag-vs-wiki.md`、`llm-wiki-pattern.md`。
+ 
+@@ -93,7 +93,7 @@
+ 
+ ## Obsidian CLI 命令行
+ 
+-人类需已安装 `obsidian` CLI，且 Obsidian 桌面端需在运行。未运行时 CLI 会自动启动，可能有延迟。
++人类需要已经安装 `obsidian` CLI，且 Obsidian 桌面端需要在运行。未运行时 CLI 会自动启动，可能有延迟。
+ 
+ 权威参考：`obsidian help` 列出全部子命令，始终最新；完整文档见 https://help.obsidian.md/cli 。
+ 
+@@ -116,13 +116,13 @@ LLM 在 [[digital-playground|Digital Playground]] 里的每次「操作」都用
+ ```
+ 
+ - 操作 (op)：一个英文动词，回答「做了什么」。开放集，按实际语义自由选词；同类操作请沿用既有词以便按操作检索。skill 调用时通常已锚定操作，详见各 skill 描述。
+-- 作用域 (scope)：操作的作用域，回答「打在哪儿」。受影响最显著的对象标识符：slug、子目录名、skill 名都行。与操作拼成快速分类元数据，支持组合检索立即收敛。真正跨域无主时可省括号。
++- 作用域 (scope)：操作的作用域，回答「打在哪儿」。受影响最显著的对象标识符：slug、子目录名、skill 名都行。与操作拼成快速分类元数据，支持组合检索立即收敛。真正跨域、没有明确主对象时，可以省略括号。
+ - 主题 (subject)：一句话讲清这次操作的具体对象，不抽象。整行 ≤ 72 字符。
+ - 正文 (body)：自由叙述，写「为什么」「关键决策」「值得回忆的细节」「待办 / 待验证」。不要重复 git 自带信息。引用其他 commit 写短 hash；引用文件写裸路径。语言风格遵循 [[#Language & Expression 语言与表达]] 节。
+ 
+ 每个 commit 一个逻辑操作；真正不可拆时挑主导操作。
+ 
+-查询走 git 原生命令。按操作 / 作用域检索 commit 主题筛活动，按 hash 看详情与受影响文件。LLM 自行选合适的 git 子命令与 flag。
++查询走 git 原生命令。按操作或作用域检索 commit 主题来筛选活动记录，按 hash 查看详情和受影响文件。
+ 
+ ## Obsidian Flavored Markdown 书写
+ 
+@@ -141,7 +141,7 @@ LLM 在 [[digital-playground|Digital Playground]] 里的每次「操作」都用
+ 
+ `aliases:` 是 frontmatter 里的别名列表（「同一物的另一个名字」），Obsidian 补全 / 反链都识别。区别于行文显示文本：alias 是页面级元数据，一次声明、全 vault 受益。
+ 
+-语法：目标页 frontmatter 写 YAML 列表：
++语法是目标页 frontmatter 写 YAML 列表：
+ 
+   ```yaml
+   ---
+@@ -158,38 +158,43 @@ LLM 在 [[digital-playground|Digital Playground]] 里的每次「操作」都用
+ **其他常用语法**
+ 
+ - Headings：`##` 起跳，`#` 标题由文件名隐含，不在正文重复。
+-- Callouts：`> [!note]` / `[!warning]` / `[!quote]` / `[!question]` 等。语法 `> [!type] 可选标题` + 后续 `>` 行，`[!type]-` 默认折叠。
+ - Embeds：嵌入一律 `![[...]]`，禁用 markdown `![alt](...)`。`![[img.png|300]]` 指定图片宽度（像素），`![[doc.pdf#page=3]]` 嵌入 PDF 指定页，`![[Note#Heading]]` / `![[Note#^block-id]]` 嵌入某节或某段。mapping 派生媒体写 `![[mapping/assets/xxx.png]]`。
+ 
+ ##  Language & Expression 语言与表达
+ 
++以下规范同时适用于与人类对话以及编写文本的场景，必须严格遵守！！！
++
+ **语言（language）**
+ 
+-- 默认使用中文与人类对话和编写文本内容。
+-- 关键术语首次出现标注英文名「中文（English）」。无合适中文译法者保留英文。专有名词保留原文，首次出现可加中文译名「English（中文）」。
+-- 英文源且术语适合保原貌时，优先保英文 + 中文释义，不强行翻译。
++- 默认使用中文。
++- 关键术语首次出现时，标注英文名「中文（English）」。如果没有合适的中文译法，保留英文。专有名词保留原文，首次出现时可加中文译名「English（中文）」。
++- 来自英文的术语如果适合保留原貌，优先保留英文并加中文释义，不强行翻译。
+ - 避免翻译腔：把外语译成中文时，要确保翻译后的表达在中文语境中易于理解。
+ 
+ **标点（punctuation）**
+ 
+-中文行文一律使用中文标点，英文标点只出现在代码、路径、命令、格式模板内部。
+-
++- 中文行文一律使用中文标点，英文标点只出现在代码、路径、命令、格式模板内部。
++- 在英文和数字前后增加空格，使排版更优雅。
+ - 一律不用破折号。冒号、逗号、分号、括号足以覆盖所有场景。
+-- 一律用直角引号 `「」`，嵌套时内层 `『』`。禁用弯引号 `""`、英文引号 `""`。
++- 一律用直角引号 `「」`，嵌套时内层用 `『』`。禁用弯引号 `""`、英文引号 `""`。
+ - 中文语境用全角 `，` `。` `？` `！` `；` `：` `（` `）`，不用半角 `,` `.` `?` `!` `;` `:` `(` `)`。
+ - 省略号用 `……`，不用 `...`。
+-- 在英文和数字前后增加空格，使排版更优雅。
+ 
+ **风格（style）**
+ 
+-以下风格规范必须严格遵守！！！
+-
+ - 追求极致的清晰（Desire for extreme clarity）。
+ - 诚实承认不确定（Be honest about uncertainty）。
+ - 不灌水（No filler）。
+ - 不总结（No summary）。
+ - 不评论（Don't editorialize）。
+ - 不使用任何类比（No analogies）。
+-- 能用文字说清的，就不要使用让人费解的符号。
+-- 少用括号注解，尽量用正常语句表达清楚。中英对照翻译除外。
++
++**句法（syntax）**
++
++- 句子保持完整，不要用电报体行文。不为压缩字数而省略主语、动词和连接词。
++- 用日常中文词汇和既有专业词汇。不生造缩写和术语，不用文言，不用行话。
++- 新概念首次出现时，先说清指什么，再给名字。
++- 代词要紧贴指代对象。
++- 尽量用文字表达，不要用让人费解的符号。
++- 不要用括号装定义、并列或关键判据。括号只放删掉也不影响句意的补充。
+ - 加粗保留给真正需要醒目的关键词句，能不加就不加。列表项不必把标识加粗。
+diff --git "a/tasks/\346\220\255\345\273\272 Digital Playground.md" "b/tasks/\346\220\255\345\273\272 Digital Playground.md"
+index de5f5f3..72d9e95 100644
+--- "a/tasks/\346\220\255\345\273\272 Digital Playground.md"	
++++ "b/tasks/\346\220\255\345\273\272 Digital Playground.md"	
+@@ -18,6 +18,8 @@
+ - [ ] 集成 web framework
+ - [ ] 集成 code runtime，python or node
+ 
++prose over bulletlist
++
+ querying agent 不直接读文件，而是通过关键词检索，这会逼迫 LLM 建立进行语义联想
+ passive memory，concept as agent，主动与用户输入和 query agent 建立联系，双方都需要释放信号（cf. 菌根）
+ 
